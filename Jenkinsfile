@@ -15,10 +15,15 @@ pipeline {
     }
 
     stages {
-        stage('Verify Host Tools') {
+        stage('Verify & Install Docker Engine') {
             steps {
-                echo 'Ensuring system tools are available on the runner host...'
-                sh 'sudo apt-get update -qq && sudo apt-get install -y unzip'
+                echo 'Verifying that core deployment prerequisites are operational on host...'
+                // Automatically configures unzip and docker packages if missing on the runner
+                sh '''
+                    sudo apt-get update -qq
+                    sudo apt-get install -y unzip docker.io
+                    sudo usermod -aG docker ubuntu || true
+                '''
             }
         }
 
@@ -33,7 +38,6 @@ pipeline {
         stage('Extract Web Assets') {
             steps {
                 script {
-                    // This map pairs your dropdown choice with the exact filename in GitHub
                     def zipMap = [
                         '2117_infinite_loop': '2117_infinite_loop.zip',
                         'Zay_eCommerce': 'Zay eCommerce website files.zip',
@@ -42,8 +46,6 @@ pipeline {
                     
                     def exactZipFile = zipMap[params.CHOSEN_WEBSITE]
                     echo "Extracting the zipped archive for: ${exactZipFile}..."
-                    
-                    // Uses double quotes to handle filenames with spaces correctly
                     sh "unzip -o \"${exactZipFile}\" -d target_extracted"
                 }
             }
@@ -54,21 +56,21 @@ pipeline {
                 echo "Injecting static website code directly into ${env.NGINX_CONTAINER_NAME}..."
                 sh """
                     # 1. Wipe the default assets inside the running Nginx container
-                    docker exec ${env.NGINX_CONTAINER_NAME} rm -rf /usr/share/nginx/html/*
+                    sudo docker exec ${env.NGINX_CONTAINER_NAME} rm -rf /usr/share/nginx/html/*
                     
                     # 2. Deploy extracted workspace directory directly inside the container filesystem
                     if [ -d "target_extracted/2117_infinite_loop" ]; then
-                        docker cp target_extracted/2117_infinite_loop/. ${env.NGINX_CONTAINER_NAME}:/usr/share/nginx/html/
+                        sudo docker cp target_extracted/2117_infinite_loop/. ${env.NGINX_CONTAINER_NAME}:/usr/share/nginx/html/
                     elif [ -d "target_extracted/Zay eCommerce website files" ]; then
-                        docker cp "target_extracted/Zay eCommerce website files/." ${env.NGINX_CONTAINER_NAME}:/usr/share/nginx/html/
+                        sudo docker cp "target_extracted/Zay eCommerce website files/." ${env.NGINX_CONTAINER_NAME}:/usr/share/nginx/html/
                     elif [ -d "target_extracted/templatemo_596_electric_xtra" ]; then
-                        docker cp target_extracted/templatemo_596_electric_xtra/. ${env.NGINX_CONTAINER_NAME}:/usr/share/nginx/html/
+                        sudo docker cp target_extracted/templatemo_596_electric_xtra/. ${env.NGINX_CONTAINER_NAME}:/usr/share/nginx/html/
                     else
-                        docker cp target_extracted/. ${env.NGINX_CONTAINER_NAME}:/usr/share/nginx/html/
+                        sudo docker cp target_extracted/. ${env.NGINX_CONTAINER_NAME}:/usr/share/nginx/html/
                     fi
                     
                     # 3. Reload Nginx internally to refresh configuration seamlessly
-                    docker exec ${env.NGINX_CONTAINER_NAME} nginx -s reload
+                    sudo docker exec ${env.NGINX_CONTAINER_NAME} nginx -s reload
                 """
                 echo 'Container hot-swap deployment successful!'
             }
