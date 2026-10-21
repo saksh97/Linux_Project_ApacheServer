@@ -11,7 +11,7 @@ pipeline {
     }
 
     environment {
-        REPO_URL = 'https://github.com/thawaresameer715-cyber/Linux_Project_ApacheServer.git'
+        REPO_URL = 'https://github.com/saksh97/Linux_Project_ApacheServer.git'
     }
 
     stages {
