@@ -59,7 +59,7 @@ pipeline {
                         sudo docker start ${env.NGINX_CONTAINER_NAME}
                     else
                         echo "Container does not exist. Spinning up a fresh Nginx container on port 80..."
-                        sudo docker run -d -p 80:80 --name ${env.NGINX_CONTAINER_NAME} nginx:alpine
+                        sudo docker run -d -p 81:80 --name ${env.NGINX_CONTAINER_NAME} nginx:alpine
                         # Give the container a brief moment to initialize file pathways
                         sleep 3
                     fi
