@@ -17,12 +17,10 @@ pipeline {
     stages {
         stage('Verify & Install Docker Engine') {
             steps {
-                echo 'Verifying that core deployment prerequisites are operational on host...'
-                // Automatically configures unzip and docker packages if missing on the runner
+                echo 'Ensuring system tools and docker engine are operational...'
                 sh '''
                     sudo apt-get update -qq
                     sudo apt-get install -y unzip docker.io
-                    sudo usermod -aG docker ubuntu || true
                 '''
             }
         }
@@ -53,12 +51,23 @@ pipeline {
 
         stage('Deploy directly to Nginx Container') {
             steps {
-                echo "Injecting static website code directly into ${env.NGINX_CONTAINER_NAME}..."
+                echo "Managing lifecycle and deploying to ${env.NGINX_CONTAINER_NAME}..."
                 sh """
-                    # 1. Wipe the default assets inside the running Nginx container
+                    # 1. Check if the target Nginx container is already running
+                    if [ \$(sudo docker ps -a -q -f name=^/${env.NGINX_CONTAINER_NAME}\$) ]; then
+                        echo "Container exists. Ensuring it is actively running..."
+                        sudo docker start ${env.NGINX_CONTAINER_NAME}
+                    else
+                        echo "Container does not exist. Spinning up a fresh Nginx container on port 80..."
+                        sudo docker run -d -p 80:80 --name ${env.NGINX_CONTAINER_NAME} nginx:alpine
+                        # Give the container a brief moment to initialize file pathways
+                        sleep 3
+                    fi
+
+                    # 2. Clear default out-of-the-box landing page assets
                     sudo docker exec ${env.NGINX_CONTAINER_NAME} rm -rf /usr/share/nginx/html/*
                     
-                    # 2. Deploy extracted workspace directory directly inside the container filesystem
+                    # 3. Inject the targeted extraction directory assets into the container filesystem
                     if [ -d "target_extracted/2117_infinite_loop" ]; then
                         sudo docker cp target_extracted/2117_infinite_loop/. ${env.NGINX_CONTAINER_NAME}:/usr/share/nginx/html/
                     elif [ -d "target_extracted/Zay eCommerce website files" ]; then
@@ -69,10 +78,10 @@ pipeline {
                         sudo docker cp target_extracted/. ${env.NGINX_CONTAINER_NAME}:/usr/share/nginx/html/
                     fi
                     
-                    # 3. Reload Nginx internally to refresh configuration seamlessly
+                    # 4. Gracefully refresh Nginx runtime configurations without container restarts
                     sudo docker exec ${env.NGINX_CONTAINER_NAME} nginx -s reload
                 """
-                echo 'Container hot-swap deployment successful!'
+                echo 'Container hot-swap deployment completed successfully!'
             }
         }
     }
