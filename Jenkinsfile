@@ -1,6 +1,6 @@
 pipeline {
-    // Force the workflow track onto your container execution host
-    agent any 
+    // Explicitly target your EC2 agent where docker and sudo privileges are configured
+    agent { label 'agent1' } 
 
     parameters {
         choice(
@@ -16,6 +16,14 @@ pipeline {
     }
 
     stages {
+        stage('Verify Host Tools') {
+            steps {
+                echo 'Ensuring system tools are available on the runner host...'
+                // Install unzip using sudo on the EC2 agent machine
+                sh 'sudo apt-get update -qq && sudo apt-get install -y unzip'
+            }
+        }
+
         stage('Checkout Code') {
             steps {
                 echo 'Cleaning workspace and fetching repository updates...'
@@ -27,10 +35,8 @@ pipeline {
         stage('Extract Web Assets') {
             steps {
                 echo "Extracting the zipped archive for: ${params.CHOSEN_WEBSITE}..."
-                sh '''
-                    apt-get update -qq && apt-get install -y unzip
-                    unzip -o "${CHOSEN_WEBSITE}*.zip" -d target_extracted
-                '''
+                // Runs the unzip utility safely on the host machine workspace
+                sh 'unzip -o "${CHOSEN_WEBSITE}*.zip" -d target_extracted'
             }
         }
 
@@ -38,7 +44,7 @@ pipeline {
             steps {
                 echo "Injecting static website code directly into ${env.NGINX_CONTAINER_NAME}..."
                 sh """
-                    # 1. Wipe the default default assets inside the running Nginx container
+                    # 1. Wipe the default assets inside the running Nginx container
                     docker exec ${env.NGINX_CONTAINER_NAME} rm -rf /usr/share/nginx/html/*
                     
                     # 2. Deploy extracted workspace directory directly inside the container filesystem
